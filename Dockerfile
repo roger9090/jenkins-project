@@ -1,20 +1,23 @@
-# Use official lightweight Node.js image
 FROM node:14-alpine3.12
 
 # Set working directory inside the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available)
-COPY package*.json ./
+# Copy only the backend folder into /app
+COPY backend ./backend
 
-# Install dependencies
+# Set working directory to backend
+WORKDIR /app/backend
+
+# Install dependencies from backend folder
+COPY backend/package*.json ./
 RUN npm install
 
-# Copy the rest of the application code
-COPY . .
+# Copy all backend code (again if needed)
+COPY backend .
 
-# Expose the correct port your app uses
+# Expose the port used by your app
 EXPOSE 8080
 
-# Run the app
+# Run the backend app
 CMD ["node", "index.js"]

@@ -1,67 +1,55 @@
 pipeline {
     agent any
-   
-    environment{
-        SCANNER_HOME= tool 'sonar-scanner'
+    
+    environment {
+        SONAR_SCANNER_HOME = tool 'SonarScanner'
     }
 
     stages {
-        stage('git-checkout') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/jaiswaladi246/to-do-app.git'
+                git 'https://github.com/roger9090/jenkins-project.git'
             }
         }
 
-    stage('Sonar Analysis') {
+        stage('SonarQube Analysis') {
             steps {
-                   sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.url=URL_OF_SONARQUBE -Dsonar.login=TOKEN_OF_SONARQUBE -Dsonar.projectName=to-do-app \
-                   -Dsonar.sources=. \
-                   -Dsonar.projectKey=to-do-app '''
-               }
-            }
-           
-		stage('OWASP Dependency Check') {
-            steps {
-               dependencyCheck additionalArguments: '--scan ./', odcInstallation: 'DP'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                withSonarQubeEnv('MySonar') {
+                    sh "${tool 'SonarScanner'}/bin/sonar-scanner -Dsonar.projectKey=dev-1 -Dsonar.sources=src -Dsonar.java.binaries=target"
+                }
             }
         }
-     
 
-         stage('Docker Build') {
+        stage('Docker Build') {
+            steps {
+                 script {
+            withDockerRegistry(credentialsId: 'dockerhub-credentials') {
+                sh '''
+                    cd /var/lib/jenkins/workspace/jenkins-project
+                    docker build -t jenkins-project:latest -f Dockerfile .
+                   '''
+                sh "docker tag jenkins-project:latest roger44/jenkins-project:latest"
+             }
+            }
+          }
+        }
+          stage('Docker Push') {
             steps {
                script{
-                   withDockerRegistry(credentialsId: '9ea0c4b0-721f-4219-be62-48a976dbeec0') {
-                    sh "docker build -t  todoapp:latest -f docker/Dockerfile . "
-                    sh "docker tag todoapp:latest username/todoapp:latest "
+                   withDockerRegistry(credentialsId: 'dockerhub-credentials') {
+                    sh "docker push  roger44/jenkins-project:latest "
                  }
                }
             }
         }
-
-        stage('Docker Push') {
+        stage ('Deploying Docker Container') {
             steps {
-               script{
-                   withDockerRegistry(credentialsId: '9ea0c4b0-721f-4219-be62-48a976dbeec0') {
-                    sh "docker push  username/todoapp:latest "
-                 }
-               }
+                script {
+                    withDockerRegistry(credentialsId: 'dockerhub-credentials') {
+                        sh "docker run -d --name jenkins-project -p 8081:8080 roger44/jenkins-project"
+                    }
+                }
             }
         }
-        stage('trivy') {
-            steps {
-               sh " trivy username/todoapp:latest"
-            }
-        }
-		stage('Deploy to Docker') {
-            steps {
-               script{
-                   withDockerRegistry(credentialsId: '9ea0c4b0-721f-4219-be62-48a976dbeec0') {
-                    sh "docker run -d --name to-do-app -p 4000:4000 username/todoapp:latest "
-                 }
-               }
-            }
-        }
-
     }
 }
